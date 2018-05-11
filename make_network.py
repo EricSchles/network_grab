@@ -14,7 +14,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 import networkx as nx
 
 
-
 #http://scikit-learn.org/stable/modules/feature_extraction.html#customizing-the-vectorizer-classes
 class LemmaTokenizer(object):
     def __init__(self):
@@ -37,7 +36,7 @@ def generate_feature_engineering():
 def generate_graph():
     transformer = generate_feature_engineering()
     mapped_data = {}
-    G = nx.Graph()
+    G = nx.MultiGraph()
     for elem in models.AdInfo.query.all():
         G.add_node(elem.id)
         mapped_data[elem.id] = transformer.fit_transform(elem.body)
@@ -45,12 +44,24 @@ def generate_graph():
         for second_elem in models.AdInfo.query.all():
             if first_elem.id == second_elem.id:
                 continue
+
+            if G.has_edge(first_elem.id, second_elem.id):
+                continue
+            body_number = first_elem.phone_number_body == second_elem.phone_number_body
+            title_number = first_elem.phone_number_title == second_elem.phone_number_title
+            body_title_number = first_elem.phone_number_body == second_elem.phone_number_title
+            title_body_number = first_elem.phone_number_title == second_elem.phone_number_body
+            if body_number or title_number or body_title_number or title_body_number:
+                G.add_edge(first_elem.id, second_elem.id, probability=1.0)
+
+            if G.has_edge(first_elem.id, second_elem.id):
+                continue
             similarity = metrics.jaccard_similarity_score(
                 mapped_data[first_elem.id],
                 mapped_data[second_elem.id]
             )
             if similarity > 0.7:
-                G.add_edge(first_elem.id, second_elem.id)
+                G.add_edge(first_elem.id, second_elem.id, probability=similarity)
     return nx.connected_component_subgraphs(G)
 
 
